@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "mspsa430_command.h"
 #include "mspsa430_frame.h"
 
 extern "C" {
