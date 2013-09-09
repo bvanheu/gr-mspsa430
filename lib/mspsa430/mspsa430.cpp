@@ -1,10 +1,12 @@
 #include <iostream>
+#include <sstream>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
 #include "mspsa430_command.h"
 #include "mspsa430_frame.h"
+#include "mspsa430_calibration.h"
 
 extern "C" {
     #include "mspsa430_lld.h"
@@ -73,6 +75,7 @@ mspsa430_frame *mspsa430::unpack(mspsa430_frame *f, uint8_t *data, size_t length
 
     f->length = data[1];
     f->command = data[2];
+
     memcpy(f->data, &data[3], data[1]);
 
     // TODO - checksum validation
@@ -88,7 +91,7 @@ int8_t mspsa430::send_and_confirm(mspsa430_frame *f) {
 
     if (f->command != frame.command
             || frame.length != 0x0) {
-            std::cout <<  __PRETTY_FUNCTION__ << ": error" << std::endl;
+            std::cout <<  __PRETTY_FUNCTION__ << ": error: unable to confirm the message sent" << std::endl;
             throw 1;
     }
 
@@ -105,7 +108,7 @@ ssize_t mspsa430::send(mspsa430_frame *f) {
 }
 
 ssize_t mspsa430::recv(mspsa430_frame *f) {
-    uint8_t data[256];
+    uint8_t data[512];
     ssize_t bytes;
     uint16_t total_bytes;
 
@@ -134,10 +137,16 @@ ssize_t mspsa430::recv(mspsa430_frame *f) {
     total_bytes += bytes;
 
     bytes = mspsa430_lld_read(this->lld, &data[3], data[1]);
+    while (bytes != data[1]) {
+        // FIXME - easy fix to read all the data coming, completely wrong, the lld layer should handle this.
+        bytes += mspsa430_lld_read(this->lld, &data[3+bytes], data[1]-bytes);
+    }
+    /*
     if (bytes != data[1]) {
-        std::cout <<  __PRETTY_FUNCTION__ << ": error: incomplete data, recv " << bytes << " should have " << f->length << " bytes" << std::endl;
+        std::cout <<  __PRETTY_FUNCTION__ << ": error: incomplete data, recv " << bytes << " bytes should have " << (int)data[1] << " bytes" << std::endl;
         throw -1;
     }
+    */
     total_bytes += bytes;
 
     // Frame checksum
@@ -153,6 +162,75 @@ ssize_t mspsa430::recv(mspsa430_frame *f) {
     return total_bytes;
 }
 
+// High level commands
+
+void mspsa430::get_info(std::string *info) {
+    std::string identification;
+    std::string hw_serial_number;
+    std::string core_version;
+    std::string spec_version;
+
+    this->get_idn(&identification);
+    this->get_hw_serial_number(&hw_serial_number);
+    this->get_core_version(&core_version);
+    this->get_spec_version(&spec_version);
+
+    info->append(identification);
+    info->append("\n");
+
+    info->append("Hardware s/n: 0x");
+    info->append(hw_serial_number);
+    info->append("\n");
+
+    info->append("Core version: 0x");
+    info->append(core_version);
+    info->append("\n");
+
+    info->append("Spectrum version: 0x");
+    info->append(spec_version);
+    info->append("\n");
+}
+
+//
+// General commands
+//
+
+void mspsa430::get_idn(std::string *idn) {
+    mspsa430_frame f = mspsa430_frame();
+    f.command = CMD_GETIDN;
+    f.length = 0x00;
+
+    this->send_and_confirm(&f);
+    this->recv(&f);
+
+    idn->append((const char *)f.data);
+}
+
+void mspsa430::get_hw_serial_number(std::string *hw_serial_number) {
+    std::stringstream ss;
+
+    mspsa430_frame f = mspsa430_frame();
+    f.command = CMD_GETHWSERNR;
+    f.length = 0x00;
+
+    this->send_and_confirm(&f);
+    this->recv(&f);
+
+    for (int i=0; i<f.length; i++) {
+        ss << std::hex << (int)f.data[i];
+    }
+
+    hw_serial_number->append(ss.str());
+}
+
+void mspsa430::hw_reset() {
+    mspsa430_frame f = mspsa430_frame();
+    f.command = CMD_HWRESET;
+    f.length = 0x00;
+
+    this->send_and_confirm(&f);
+}
+
 void mspsa430::blink_led() {
     mspsa430_frame f = mspsa430_frame();
     f.command = CMD_BLINKLED;
@@ -161,9 +239,26 @@ void mspsa430::blink_led() {
     this->send_and_confirm(&f);
 }
 
-void mspsa430::get_hw_serial_number() {
+void mspsa430::get_core_version(std::string *core_version) {
+    std::stringstream ss;
+
     mspsa430_frame f = mspsa430_frame();
-    f.command = CMD_GETHWSERNR;
+    f.command = CMD_GETCOREVER;
+    f.length = 0x00;
+
+    this->send_and_confirm(&f);
+    this->recv(&f);
+
+    for (int i=0; i<f.length; i++) {
+        ss << std::hex << (int)f.data[i];
+    }
+
+    core_version->append(ss.str());
+}
+
+void mspsa430::get_last_error() {
+    mspsa430_frame f = mspsa430_frame();
+    f.command = CMD_GETLASTERROR;
     f.length = 0x00;
 
     this->send_and_confirm(&f);
@@ -175,25 +270,174 @@ void mspsa430::get_hw_serial_number() {
     std::cout << std::endl;
 }
 
-int main(int argc, char *argv[]) {
+void mspsa430::sync() {
+    mspsa430_frame f = mspsa430_frame();
+    f.command = CMD_SYNC;
+    f.length = 0x00;
 
-    std::cout << "--------------------" << std::endl;
-    std::cout << "| MSP-SA430-SUB1GHZ" << std::endl;
-    std::cout << "--------------------" << std::endl;
+    this->send_and_confirm(&f);
+}
+
+//
+// Flash operation
+//
+
+void mspsa430::flash_read(uint16_t address, uint8_t *buffer, uint16_t length) {
+    mspsa430_frame frame_command;
+    mspsa430_frame frame_data;
+
+    uint16_t block_count;
+    uint16_t block_index;
+    uint16_t block_length;
+    uint16_t addr_current;
+    uint16_t byte_index;
+
+    frame_command.command = CMD_FLASH_READ;
+    frame_command.length = 0x04;
+
+    block_count = length / 255;
+
+    for (block_index=0; block_index <= block_count; block_index++) {
+        block_length = 255;
+        if (length < 256) {
+            block_length = length;
+        }
+        addr_current = address + (block_index * 255);
+        frame_command.data[0] = addr_current >> 8;
+        frame_command.data[1] = addr_current & 0xFF;
+        frame_command.data[2] = block_length >> 8;
+        frame_command.data[3] = block_length & 0x00FF;
+
+        this->send_and_confirm(&frame_command);
+        this->recv(&frame_data);
+
+        for (byte_index=0; byte_index < frame_data.length; byte_index++) {
+            buffer[(block_index * 256) + byte_index] = frame_data.data[byte_index];
+            length--;
+        }
+    }
+}
+
+//
+// Spectrum measurement
+//
+
+void mspsa430::get_spec_version(std::string *spectrum_version) {
+    std::stringstream ss;
+
+    mspsa430_frame f = mspsa430_frame();
+    f.command = CMD_GETSPECVER;
+    f.length = 0x00;
+
+    this->send_and_confirm(&f);
+    this->recv(&f);
+
+    for (int i=0; i<f.length; i++) {
+        ss << std::hex << (int)f.data[i];
+    }
+
+    spectrum_version->append(ss.str());
+}
+
+void mspsa430::set_freq_start(uint32_t frequency) {
+    mspsa430_frame f = mspsa430_frame();
+    f.command = CMD_SETFSTART;
+    f.length = 0x04;
+    memcpy(f.data, (uint8_t *)&frequency, 4);
+
+    this->send_and_confirm(&f);
+}
+
+void mspsa430::set_freq_stop(uint32_t frequency) {
+    mspsa430_frame f = mspsa430_frame();
+    f.command = CMD_SETFSTOP;
+    f.length = 0x04;
+    memcpy(f.data, (uint8_t *)&frequency, 4);
+
+    this->send_and_confirm(&f);
+}
+
+void mspsa430::set_freq_step(uint32_t frequency) {
+    mspsa430_frame f = mspsa430_frame();
+    f.command = CMD_SETFSTEP;
+    f.length = 0x04;
+    memcpy(f.data, (uint8_t *)&frequency, 4);
+
+    this->send_and_confirm(&f);
+}
+
+void mspsa430::set_frequency(uint32_t frequency) {
+}
+
+void mspsa430::get_spectrum_no_init() {
+    mspsa430_frame f = mspsa430_frame();
+    f.command = CMD_GETSPECNOINIT;
+    f.length = 0x00;
+
+    this->send_and_confirm(&f);
+    this->recv(&f);
+
+    std::cout << "Length: " << (int)f.length << std::endl;
+
+    for (int i=0; i<f.length; i++) {
+        std::cout << std::hex << (int)f.data[i];
+    }
+    std::cout << std::endl;
+}
+
+#define FLASH_CALIBRATION_DATA_START 0xD400
+#define FLASH_CALIBRATION_DATA_END 0xEBFF
+#define PROGTYPE_CALC 62
+
+struct program_header {
+    uint16_t mem_start_addr;
+    uint16_t mem_length;
+    uint16_t mem_type;
+    uint16_t type_division;
+    uint16_t crc16;
+};
+
+int main(int argc, char *argv[]) {
+    std::string information;
+    uint8_t flash[65536];
+    struct program_header ph;
+    struct calibration_data cd;
 
     mspsa430_lld_t lld;
-
     mspsa430 *m = new mspsa430(&lld);
 
     m->connect("/dev/ttyACM0", 921600);
 
-    std::cout << "blink led...";
-    m->blink_led();
-    std::cout << "done" << std::endl;
+    m->get_info(&information);
+    std::cout << information;
+    std::cout << "------------------------------------" << std::endl;
 
-    std::cout << "hw serial number...";
-    m->get_hw_serial_number();
-    std::cout << "done" << std::endl;
+    m->flash_read(0xD400, (uint8_t *)&ph, sizeof(struct program_header));
+
+    std::cout << "Memory start address: 0x" << std::hex << ph.mem_start_addr << std::endl;
+    std::cout << "Memory length: 0x" << std::hex << ph.mem_length << std::endl;
+    std::cout << "Memory type: 0x" << std::hex << ph.mem_type << std::endl;
+    std::cout << "Type division: 0x" << std::hex << ph.type_division << std::endl;
+    std::cout << "CRC16: 0x" << std::hex << ph.crc16 << std::endl;
+    std::cout << "------------------------------------" << std::endl;
+
+    m->flash_read(0xD400 + sizeof(struct program_header), (uint8_t *)&cd, sizeof(struct calibration_data));
+
+    std::cout << "Format version: 0x" << std::hex << cd.format_version << std::endl;
+    std::cout << "Software version: 0x" << std::hex << cd.software_version << std::endl;
+    std::cout << "Prod side: 0x" << std::hex << cd.prod_side << std::endl;
+
+    std::cout << "Calibration frequency range:" << std::endl;
+    for (uint8_t i=0; i<3; i++) {
+        std::cout << "\tStart: " << std::dec << cd.freq_range[i].start <<  std::endl;
+        std::cout << "\tStop: " << cd.freq_range[i].stop <<  std::endl;
+        std::cout << "\tSamples: " << cd.freq_range[i].samples << std::endl;
+    }
+
+    std::cout << "Calibration date: " << cd.calibration_date << std::endl;
+    std::cout << "USB s/n: " << cd.usb_serial_number << std::endl;
+
+    m->disconnect();
 
     return 0;
 }

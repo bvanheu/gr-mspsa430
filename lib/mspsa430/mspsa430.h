@@ -16,27 +16,32 @@ class mspsa430 {
         void connect(std::string device, int speed);
         void disconnect();
 
-        /*
+        // High-level
+        void get_info(std::string *info);
+
         // General
-        void get_idn;
-        */
-        void get_hw_serial_number();
+        void get_idn(std::string *idn);
+        void get_hw_serial_number(std::string *hw_serial_number);
+        void hw_reset();
         void blink_led();
-        /*
-        void get_core_version();
+        void get_core_version(std::string *core_version);
         void get_last_error();
         void sync();
+        // Flash operation
+        void flash_read(uint16_t address, uint8_t *buffer, uint16_t length);
         // Spectrum measurement
-        void get_spec_version();
-        void set_freq_start();
-        void set_freq_stop();
-        void set_freq_step();
-        void set_freq_bandwidth();
+        void get_spec_version(std::string *spec_version);
+        void set_freq_start(uint32_t frequency);
+        void set_freq_stop(uint32_t frequency);
+        void set_freq_step(uint32_t frequency);
+        void set_frequency(uint32_t frequency);
+        void set_rx_filter_bandwidth();
         void set_dac();
         void set_gain();
         void set_freq_intermediate();
         void set_init_param();
         void get_spectrum_no_init();
+        /*
         // Production
         void get_prod_version();
         void set_prod_fw_init();

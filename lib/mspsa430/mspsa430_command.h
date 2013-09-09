@@ -45,6 +45,11 @@ enum mspsa430_command {
     CMD_GETCOREVER     =  5,
     CMD_GETLASTERROR   =  6,
     CMD_SYNC           =  7,
+    // Flash operation
+    CMD_FLASH_READ      = 10,
+    CMD_FLASH_WRITE     = 11,
+    CMD_FLASH_ERASE     = 12,
+    CMD_FLASH_GETCRC    = 13,
     // Spectrum Measurement
     CMD_GETSPECVER     =  20,
     CMD_SETFSTART      =  21,   // Set Start Frequency fstart

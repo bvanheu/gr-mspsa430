@@ -92,16 +92,23 @@ void mspsa430_lld_close(mspsa430_lld_t *m) {
 }
 
 ssize_t mspsa430_lld_read(mspsa430_lld_t *m, uint8_t *buffer, size_t buflen) {
-    return read(m->fd, buffer, buflen);
+    ssize_t bytes = read(m->fd, buffer, buflen);
+    if (bytes < buflen) {
+        bytes += read(m->fd, buffer+bytes, buflen-bytes);
+    }
+
+    return bytes;
 }
 
 ssize_t mspsa430_lld_write(mspsa430_lld_t *m, uint8_t *buffer, size_t buflen) {
     int i=0;
+    /*
     printf("\nbuflen: %d\n", buflen);
     for (i=0; i<buflen; i++) {
         printf("%02X", buffer[i]);
     }
     printf("\n");
+    */
     return write(m->fd, buffer, buflen);
 }
 
