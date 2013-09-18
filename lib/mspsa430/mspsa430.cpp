@@ -1,5 +1,6 @@
 #include <iostream>
 #include <sstream>
+
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -164,63 +165,249 @@ ssize_t mspsa430::recv(mspsa430_frame *f) {
 
 // High level commands
 
-void mspsa430::get_info(std::string *info) {
-    std::string identification;
-    std::string hw_serial_number;
-    std::string core_version;
-    std::string spec_version;
+std::string mspsa430::get_info() {
+    std::string info;
+    std::string identity;
+    uint32_t hw_serial_number;
+    uint16_t core_version;
+    uint16_t spectrum_version;
+    uint32_t boot_count = 0;
+    uint32_t hw_id = 0;
+    uint16_t prod_version = 0;
 
-    this->get_idn(&identification);
-    this->get_hw_serial_number(&hw_serial_number);
-    this->get_core_version(&core_version);
-    this->get_spec_version(&spec_version);
+    identity = this->get_identity();
+    hw_serial_number = this->get_hw_serial_number();
+    core_version = this->get_core_version();
+    spectrum_version = this->get_spec_version();
+    boot_count = this->get_boot_count();
+    hw_id = this->get_hw_id();
+    prod_version = this->get_prod_version();
 
-    info->append(identification);
-    info->append("\n");
+    info.append(identity);
+    info.append("\n");
 
-    info->append("Hardware s/n: 0x");
-    info->append(hw_serial_number);
-    info->append("\n");
+    info.append("Hardware s/n: ");
+    info.append(std::to_string(hw_serial_number));
+    info.append("\n");
 
-    info->append("Core version: 0x");
-    info->append(core_version);
-    info->append("\n");
+    info.append("Hardware id: ");
+    info.append(std::to_string(hw_id));
+    info.append("\n");
 
-    info->append("Spectrum version: 0x");
-    info->append(spec_version);
-    info->append("\n");
+    info.append("Core version: ");
+    info.append(std::to_string(core_version));
+    info.append("\n");
+
+    info.append("Spectrum version: ");
+    info.append(std::to_string(spectrum_version));
+    info.append("\n");
+
+    info.append("Production version: ");
+    info.append(std::to_string(prod_version));
+    info.append("\n");
+
+    info.append("Boot count: ");
+    info.append(std::to_string(boot_count));
+    info.append("\n");
+
+    return info;
+}
+
+std::string mspsa430::get_calibration_data_hr() {
+    std::string info;
+
+    info.append("Format version: ");
+    info.append(std::to_string(this->calibration_data.format_version));
+    info.append("\n");
+
+    info.append("Calibration date: ");
+    info.append((const char *)this->calibration_data.calibration_date);
+    info.append("\n");
+
+    info.append("Software version: ");
+    info.append(std::to_string(this->calibration_data.software_version));
+    info.append("\n");
+
+    info.append("Production side: ");
+    info.append(std::to_string(this->calibration_data.prod_side));
+    info.append("\n");
+
+    info.append("\nCalibration frequency range\n");
+    info.append("---------------------------\n");
+    for (uint8_t i=0; i<3; i++) {
+        info.append("\t" + std::to_string(this->calibration_data.freq_range[i].start) + " Hz - " + std::to_string(this->calibration_data.freq_range[i].stop) + " Hz @ " + std::to_string(this->calibration_data.freq_range[i].samples) + " samples\n");
+    }
+
+    info.append("\nReference level gain (level @ gain)\n");
+    info.append("-----------------------------------\n");
+    for (uint8_t i=0; i<8; i++) {
+        info.append("\t" + std::to_string(this->calibration_data.ref_gain_table[i].reference_level) + " @ " + std::to_string(this->calibration_data.ref_gain_table[i].gain) + "\n");
+    }
+
+    info.append("Hardware id: ");
+    info.append(std::to_string(this->calibration_data.hardware_id));
+    info.append("\n");
+
+    info.append("USB s/n: ");
+    info.append((const char *)this->calibration_data.usb_serial_number);
+    info.append("\n");
+
+    info.append("XTAL frequency: " + std::to_string(this->calibration_data.xtal_freq) + " Hz (" + std::to_string(this->calibration_data.xtal_ppm) + " ppm)\n");
+
+    info.append("\nTemperature\n");
+    info.append("-----------\n");
+    info.append("\tStart: ");
+    for (uint8_t i=0; i<6; i++) {
+        info.append(std::to_string(this->calibration_data.dev_temp_start[i]) +  ", ");
+    }
+    info.append("\n");
+    info.append("\tStop: ");
+    for (uint8_t i=0; i<6; i++) {
+        info.append(std::to_string(this->calibration_data.dev_temp_stop[i]) +  ", ");
+    }
+    info.append("\n");
+
+    /*
+    info.append("\nDC select and gain level per frequency range\n");
+    info.append("--------------------------------------------\n");
+    for (uint8_t freq_i=0; freq_i<3; freq_i++) {
+        for (uint8_t gain_i=0; gain_i<8; gain_i++) {
+            info.append(std::to_string(this->calibration_data.coeff_freq_gain[freq_i][gain_i].dc_select) + " - ");
+            for (uint8_t value_i=0; value_i<8; value_i++) {
+                info.append("[" + std::to_string(this->calibration_data.coeff_freq_gain[freq_i][gain_i].values[value_i]) + "] ");
+            }
+            info.append("\n");
+        }
+        info.append("\n\n");
+    }
+    */
+
+    return info;
+}
+
+void mspsa430::setup() {
+    uint32_t core_version = 0;
+    uint32_t spectrum_version = 0;
+
+    // Initialize spectrum measurement
+    this->init_spec_measurement();
+
+    // Validate firmware version
+    core_version = this->get_core_version();
+    spectrum_version = this->get_spec_version();
+    if (core_version == 0xFFFF || core_version < 0x0209) {
+        throw 1;
+    }
+    if (spectrum_version == 0xFFFF || spectrum_version < 0x0204) {
+        throw 2;
+    }
+
+    // Load calibration data
+    this->load_calibration_data();
+}
+
+
+#define FLASH_CALIBRATION_DATA_START 0xD400
+#define FLASH_CALIBRATION_DATA_END 0xEBFF
+#define PROGTYPE_CALC 62
+
+void mspsa430::load_calibration_data() {
+    uint8_t flash[65536];
+    ssize_t bytes = 0;
+
+    bytes = this->flash_read(FLASH_CALIBRATION_DATA_START + sizeof(struct program_header), flash, sizeof(struct calibration_data));
+
+    this->calibration_data.format_version = be16toh(*(uint16_t *)flash);
+    memcpy(this->calibration_data.calibration_date, (const uint8_t *)&flash[2], 16);
+    this->calibration_data.calibration_date[15] = 0;
+    this->calibration_data.software_version = be16toh(*(uint16_t *)&flash[0x12]);
+    this->calibration_data.prod_side = flash[0x14];
+    for (uint8_t i=0; i<3; i++) {
+        this->calibration_data.freq_range[i].start = be32toh(((uint32_t *)&flash[0x15])[i*3+0]);
+        this->calibration_data.freq_range[i].stop = be32toh(((uint32_t *)&flash[0x15])[i*3+1]);
+        this->calibration_data.freq_range[i].samples = be32toh(((uint32_t *)&flash[0x15])[i*3+2]);
+    }
+    for (uint8_t i=0; i<8; i++) {
+        this->calibration_data.ref_gain_table[i].reference_level = *(int8_t *)&flash[0x39 + i * 2 + 0];
+        this->calibration_data.ref_gain_table[i].gain = flash[0x40 + i * 2 + 1];
+    }
+    this->calibration_data.hardware_id = be32toh(*(uint32_t *)&flash[0x49]);
+    memcpy(this->calibration_data.usb_serial_number, (const uint8_t *)&flash[0x4D], 16);
+
+    // Device crystal information
+    this->calibration_data.xtal_freq = be32toh(*(uint32_t *)&flash[0x5D]);
+    this->calibration_data.xtal_ppm = be16toh(*(uint16_t *)&flash[0x61]);
+
+    // Device start/stop temperature calibration
+    for (uint8_t i=0; i<6; i++) {
+        this->calibration_data.dev_temp_start[i] = flash[0x63 + i];
+    }
+    for (uint8_t i=0; i<6; i++) {
+        this->calibration_data.dev_temp_stop[i] = flash[0x69 + i];
+    }
+
+
+    // Device calibration coefficient and dc select data per freq range and gain level
+    //
+    // freq range 0
+    //      [uint8_t][double][double][double][double][double][double][double][double]
+    //      ... 8 times
+    // freq range 1
+    //      [uint8_t][double][double][double][double][double][double][double][double]
+    //      ... 8 times
+    // freq range 2
+    //      [uint8_t][double][double][double][double][double][double][double][double]
+    //      ... 8 times
+    for (uint8_t freq_i=0; freq_i<3; freq_i++) {
+        for (uint8_t gain_i=0; gain_i<8; gain_i++) {
+            this->calibration_data.coeff_freq_gain[freq_i][gain_i].dc_select = flash[0x6F + (freq_i * 520) + (gain_i * 65)];
+            for (uint8_t value_i=0; value_i<8; value_i++) {
+                uint8_t *pointer = &flash[0x6F + (freq_i * 520) + (gain_i * 65 + 1) + value_i * 8];
+                double temp = 0;
+                uint8_t *dest = (uint8_t *)&temp;
+
+                dest[0] = pointer[7];
+                dest[1] = pointer[6];
+                dest[2] = pointer[5];
+                dest[3] = pointer[4];
+                dest[4] = pointer[3];
+                dest[5] = pointer[2];
+                dest[6] = pointer[1];
+                dest[7] = pointer[0];
+
+                // FIXME - the value sometimes doesn't make sense...
+                this->calibration_data.coeff_freq_gain[freq_i][gain_i].values[value_i] = temp;
+            }
+        }
+    }
 }
 
 //
 // General commands
 //
 
-void mspsa430::get_idn(std::string *idn) {
-    mspsa430_frame f = mspsa430_frame();
-    f.command = CMD_GETIDN;
-    f.length = 0x00;
+std::string mspsa430::get_identity() {
+    mspsa430_frame f = mspsa430_frame(CMD_GETIDN);
+    std::string identity;
 
     this->send_and_confirm(&f);
     this->recv(&f);
 
-    idn->append((const char *)f.data);
+    // Null terminate the string
+    f.data[f.length] = 0x00;
+
+    identity.append((const char *)f.data);
+
+    return identity;
 }
 
-void mspsa430::get_hw_serial_number(std::string *hw_serial_number) {
-    std::stringstream ss;
-
-    mspsa430_frame f = mspsa430_frame();
-    f.command = CMD_GETHWSERNR;
-    f.length = 0x00;
+uint32_t mspsa430::get_hw_serial_number() {
+    mspsa430_frame f = mspsa430_frame(CMD_GETHWSERNR);
 
     this->send_and_confirm(&f);
     this->recv(&f);
 
-    for (int i=0; i<f.length; i++) {
-        ss << std::hex << (int)f.data[i];
-    }
-
-    hw_serial_number->append(ss.str());
+    return be32toh(*(uint32_t *)f.data);
 }
 
 void mspsa430::hw_reset() {
@@ -239,21 +426,13 @@ void mspsa430::blink_led() {
     this->send_and_confirm(&f);
 }
 
-void mspsa430::get_core_version(std::string *core_version) {
-    std::stringstream ss;
-
-    mspsa430_frame f = mspsa430_frame();
-    f.command = CMD_GETCOREVER;
-    f.length = 0x00;
+uint16_t mspsa430::get_core_version() {
+    mspsa430_frame f = mspsa430_frame(CMD_GETCOREVER);
 
     this->send_and_confirm(&f);
     this->recv(&f);
 
-    for (int i=0; i<f.length; i++) {
-        ss << std::hex << (int)f.data[i];
-    }
-
-    core_version->append(ss.str());
+    return be16toh(*(uint16_t *)f.data);
 }
 
 void mspsa430::get_last_error() {
@@ -282,7 +461,7 @@ void mspsa430::sync() {
 // Flash operation
 //
 
-void mspsa430::flash_read(uint16_t address, uint8_t *buffer, uint16_t length) {
+ssize_t mspsa430::flash_read(uint16_t address, uint8_t *buffer, uint16_t length) {
     mspsa430_frame frame_command;
     mspsa430_frame frame_data;
 
@@ -291,6 +470,7 @@ void mspsa430::flash_read(uint16_t address, uint8_t *buffer, uint16_t length) {
     uint16_t block_length;
     uint16_t addr_current;
     uint16_t byte_index;
+    ssize_t byte_read = 0;
 
     frame_command.command = CMD_FLASH_READ;
     frame_command.length = 0x04;
@@ -309,34 +489,28 @@ void mspsa430::flash_read(uint16_t address, uint8_t *buffer, uint16_t length) {
         frame_command.data[3] = block_length & 0x00FF;
 
         this->send_and_confirm(&frame_command);
-        this->recv(&frame_data);
+        byte_read += this->recv(&frame_data);
 
         for (byte_index=0; byte_index < frame_data.length; byte_index++) {
             buffer[(block_index * 256) + byte_index] = frame_data.data[byte_index];
             length--;
         }
     }
+
+    return byte_read;
 }
 
 //
 // Spectrum measurement
 //
 
-void mspsa430::get_spec_version(std::string *spectrum_version) {
-    std::stringstream ss;
-
-    mspsa430_frame f = mspsa430_frame();
-    f.command = CMD_GETSPECVER;
-    f.length = 0x00;
+uint16_t mspsa430::get_spec_version() {
+    mspsa430_frame f = mspsa430_frame(CMD_GETSPECVER);
 
     this->send_and_confirm(&f);
     this->recv(&f);
 
-    for (int i=0; i<f.length; i++) {
-        ss << std::hex << (int)f.data[i];
-    }
-
-    spectrum_version->append(ss.str());
+    return be16toh(*(uint16_t *)f.data);
 }
 
 void mspsa430::set_freq_start(uint32_t frequency) {
@@ -369,6 +543,14 @@ void mspsa430::set_freq_step(uint32_t frequency) {
 void mspsa430::set_frequency(uint32_t frequency) {
 }
 
+void mspsa430::set_freq_intermediate() {
+}
+
+void mspsa430::init_spec_measurement() {
+    mspsa430_frame f = mspsa430_frame(CMD_INITPARAMETER);
+    this->send_and_confirm(&f);
+}
+
 void mspsa430::get_spectrum_no_init() {
     mspsa430_frame f = mspsa430_frame();
     f.command = CMD_GETSPECNOINIT;
@@ -385,57 +567,74 @@ void mspsa430::get_spectrum_no_init() {
     std::cout << std::endl;
 }
 
-#define FLASH_CALIBRATION_DATA_START 0xD400
-#define FLASH_CALIBRATION_DATA_END 0xEBFF
-#define PROGTYPE_CALC 62
+//
+// Production
+//
 
-struct program_header {
-    uint16_t mem_start_addr;
-    uint16_t mem_length;
-    uint16_t mem_type;
-    uint16_t type_division;
-    uint16_t crc16;
-};
+uint16_t mspsa430::get_prod_version() {
+    mspsa430_frame f = mspsa430_frame(CMD_GETPRODVER);
+
+    this->send_and_confirm(&f);
+    this->recv(&f);
+
+    return be16toh(*(uint16_t *)f.data);
+}
+
+void mspsa430::set_prod_fw_init() {
+}
+
+void mspsa430::get_temp() {
+    mspsa430_frame f = mspsa430_frame(CMD_GETTEMP);
+
+    this->send_and_confirm(&f);
+    this->recv(&f);
+
+    for (int i=0; i<f.length; i++) {
+        std::cout << std::hex << (int)f.data[i];
+    }
+    std::cout << std::endl;
+}
+
+uint32_t mspsa430::get_hw_id() {
+    mspsa430_frame f = mspsa430_frame(CMD_GETHWID);
+
+    this->send_and_confirm(&f);
+    this->recv(&f);
+
+    return be32toh(*(uint32_t *)f.data);
+}
+
+void mspsa430::set_hw_id() {
+}
+
+uint32_t mspsa430::get_boot_count() {
+    mspsa430_frame f = mspsa430_frame(CMD_GETBOOTCNT);
+
+    this->send_and_confirm(&f);
+    this->recv(&f);
+
+    return be32toh(*(uint32_t *)f.data);
+}
 
 int main(int argc, char *argv[]) {
     std::string information;
-    uint8_t flash[65536];
-    struct program_header ph;
-    struct calibration_data cd;
+    std::string calibration_data;
+    ssize_t bytes;
 
     mspsa430_lld_t lld;
     mspsa430 *m = new mspsa430(&lld);
 
     m->connect("/dev/ttyACM0", 921600);
 
-    m->get_info(&information);
+    information = m->get_info();
     std::cout << information;
-    std::cout << "------------------------------------" << std::endl;
 
-    m->flash_read(0xD400, (uint8_t *)&ph, sizeof(struct program_header));
+    std::cout << "-------------------------------------" << std::endl;
 
-    std::cout << "Memory start address: 0x" << std::hex << ph.mem_start_addr << std::endl;
-    std::cout << "Memory length: 0x" << std::hex << ph.mem_length << std::endl;
-    std::cout << "Memory type: 0x" << std::hex << ph.mem_type << std::endl;
-    std::cout << "Type division: 0x" << std::hex << ph.type_division << std::endl;
-    std::cout << "CRC16: 0x" << std::hex << ph.crc16 << std::endl;
-    std::cout << "------------------------------------" << std::endl;
+    m->load_calibration_data();
+    calibration_data = m->get_calibration_data_hr();
 
-    m->flash_read(0xD400 + sizeof(struct program_header), (uint8_t *)&cd, sizeof(struct calibration_data));
-
-    std::cout << "Format version: 0x" << std::hex << cd.format_version << std::endl;
-    std::cout << "Software version: 0x" << std::hex << cd.software_version << std::endl;
-    std::cout << "Prod side: 0x" << std::hex << cd.prod_side << std::endl;
-
-    std::cout << "Calibration frequency range:" << std::endl;
-    for (uint8_t i=0; i<3; i++) {
-        std::cout << "\tStart: " << std::dec << cd.freq_range[i].start <<  std::endl;
-        std::cout << "\tStop: " << cd.freq_range[i].stop <<  std::endl;
-        std::cout << "\tSamples: " << cd.freq_range[i].samples << std::endl;
-    }
-
-    std::cout << "Calibration date: " << cd.calibration_date << std::endl;
-    std::cout << "USB s/n: " << cd.usb_serial_number << std::endl;
+    std::cout << calibration_data;
 
     m->disconnect();
 
