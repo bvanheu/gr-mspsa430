@@ -6,7 +6,7 @@ How to build and install?
     $ mkdir build && cd build
     $ PKG_CONFIG_ALLOW_SYSTEM_CFLAGS=1 cmake ..
 
-To install everything in '/usr/ intead of /usr/local, run the following:
+To install everything in */usr* intead of */usr/local*, run the following:
 
     $ PKG_CONFIG_ALLOW_SYSTEM_CLFAGS=1 cmake -DCMAKE_INSTALL_PREFIX:PATH=/usr ..
 
