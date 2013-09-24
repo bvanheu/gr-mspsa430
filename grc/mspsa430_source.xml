@@ -2,7 +2,7 @@
 <block>
   <name>MSP-SA430 source</name>
   <key>mspsa430_source</key>
-  <category>MSP-SA430-1GHZ</category>
+  <category>MSP-SA430-SUB1GHZ</category>
   <import>import mspsa430</import>
   <make>mspsa430.source($path)</make>
   <!-- Make one 'param' node for every Parameter you want settable from the GUI.

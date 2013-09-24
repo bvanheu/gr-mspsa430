@@ -28,11 +28,9 @@
 namespace gr {
   namespace mspsa430 {
 
-    source::sptr
-    source::make(const std::string path)
+    source::sptr source::make(const std::string path)
     {
-      return gnuradio::get_initial_sptr
-        (new source_impl(path));
+      return gnuradio::get_initial_sptr(new source_impl(path));
     }
 
     static const int MIN_IN = 0;  /*!< Mininum number of input streams. */
@@ -47,15 +45,20 @@ namespace gr {
      */
     source_impl::source_impl(const std::string path)
       : gr::sync_block("mspsa430_source",
-              gr::io_signature::make(<+MIN_IN+>, <+MAX_IN+>, sizeof(<+ITYPE+>)),
-              gr::io_signature::make(<+MIN_OUT+>, <+MAX_OUT+>, sizeof(<+OTYPE+>)))
-    {}
+              gr::io_signature::make(MIN_IN, MAX_IN, sizeof(uint8_t)),
+              gr::io_signature::make(MIN_OUT, MAX_OUT, sizeof(uint8_t)))
+    {
+        this->m = new mspsa430(&this->lld);
+        this->m->connect("/dev/ttyACM0", 921600);
+        this->m->setup();
+    }
 
     /*
      * Our virtual destructor.
      */
     source_impl::~source_impl()
     {
+        this->m->disconnect();
     }
 
     int
@@ -63,13 +66,23 @@ namespace gr {
 			  gr_vector_const_void_star &input_items,
 			  gr_vector_void_star &output_items)
     {
-        const <+ITYPE+> *in = (const <+ITYPE+> *) input_items[0];
-        <+OTYPE+> *out = (<+OTYPE+> *) output_items[0];
+        const int8_t *in = (const int8_t *) input_items[0];
+        int8_t *out = (int8_t *) output_items[0];
+        int i=0;
 
         // Do <+signal processing+>
+        std::cout << "Nbr output items: " << noutput_items << std::endl;
+        std::vector<int8_t> spectrum;
+
+        spectrum = this->m->get_spectrum_no_init();
+
+        for (i=0; i<spectrum.size(); i++) {
+            out[i] = spectrum.at(i);
+        }
 
         // Tell runtime system how many output items we produced.
-        return noutput_items;
+        //return noutput_items;
+        return i;
     }
 
   } /* namespace mspsa430 */

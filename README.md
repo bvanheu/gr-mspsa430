@@ -1,4 +1,7 @@
-This is an attempt to create a MSP-SA430-SUB1GHZ module for GNU Radio.
+GR-MSPSA430
+===========
+
+This is an attempt to create a MSP-SA430-SUB1GHZ source block for GNU Radio.
 
 How to build and install?
 -------------------------
