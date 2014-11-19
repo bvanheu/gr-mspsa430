@@ -28,16 +28,13 @@ link_directories(${Boost_LIBRARY_DIRS})
 
 list(APPEND mspsa430_sources
     ${CMAKE_CURRENT_SOURCE_DIR}/mspsa430/mspsa430.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/mspsa430/mspsa430_lld.cpp
     source_impl.cc
 )
 
-list(APPEND mspsa430_lld_sources
-    ${CMAKE_CURRENT_SOURCE_DIR}/mspsa430/mspsa430_lld.c
-)
-
-add_library(gnuradio-mspsa430-lld SHARED ${mspsa430_lld_sources})
 add_library(gnuradio-mspsa430 SHARED ${mspsa430_sources})
-target_link_libraries(gnuradio-mspsa430 ${Boost_LIBRARIES} ${GNURADIO_RUNTIME_LIBRARIES} ${gnuradio-mspsa430-lld})
+
+target_link_libraries(gnuradio-mspsa430 ${Boost_LIBRARIES} ${GNURADIO_RUNTIME_LIBRARIES})
 set_target_properties(gnuradio-mspsa430 PROPERTIES DEFINE_SYMBOL "gnuradio_mspsa430_EXPORTS")
 
 ########################################################################
