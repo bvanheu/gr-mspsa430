@@ -38,6 +38,7 @@ endforeach(incdir)
 set(GR_SWIG_LIBRARIES gnuradio-mspsa430)
 set(GR_SWIG_DOC_FILE ${CMAKE_CURRENT_BINARY_DIR}/mspsa430_swig_doc.i)
 set(GR_SWIG_DOC_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/../include)
+set(GR_SWIG_SOURCE_DEPS gnuradio-mspsa430)
 
 GR_SWIG_MAKE(mspsa430_swig mspsa430_swig.i)
 
