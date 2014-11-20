@@ -1,5 +1,6 @@
 #!/bin/bash
 
-clang -shared mspsa430_lld.c -o libmspsa430_lld.so
-clang++ mspsa430.cpp -L . -l mspsa430_lld -o mspsa430 -std=c++11
-
+# uncomment main() in mspsa430.cpp
+# sudo ./mspsa430
+CC=c++
+$CC mspsa430_lld.cpp mspsa430.cpp -o mspsa430 -std=c++11

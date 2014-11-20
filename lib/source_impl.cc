@@ -66,9 +66,9 @@ namespace gr {
 			  gr_vector_const_void_star &input_items,
 			  gr_vector_void_star &output_items)
     {
-        const int8_t *in = (const int8_t *) input_items[0];
+        //const int8_t *in = (const int8_t *) input_items[0];
         int8_t *out = (int8_t *) output_items[0];
-        int i=0;
+        size_t i = 0;
 
         // Do <+signal processing+>
         std::cout << "Nbr output items: " << noutput_items << std::endl;
