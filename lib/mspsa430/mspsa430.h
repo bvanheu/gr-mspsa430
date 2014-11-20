@@ -1,17 +1,12 @@
 #ifndef MSPSA430_H
 #define MSPSA430_H
 
-#include <vector>
+#include <string>
 
-#include <sys/types.h>
-
-#include "mspsa430_frame.h"
 #include "mspsa430_calibration.h"
 
-
-extern "C" {
-    #include "mspsa430_lld.h"
-}
+struct mspsa430_lld_t;
+class mspsa430_frame;
 
 namespace gr {
     namespace mspsa430 {

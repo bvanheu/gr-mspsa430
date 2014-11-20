@@ -10,12 +10,8 @@
 #include "mspsa430_command.h"
 #include "mspsa430_frame.h"
 #include "mspsa430_calibration.h"
-
-extern "C" {
-    #include "mspsa430_lld.h"
-}
-
 #include "mspsa430.h"
+#include "mspsa430_lld.h"
 
 #define FRAME_MAX_LENGTH 256
 
@@ -116,7 +112,7 @@ namespace gr {
         ssize_t mspsa430::recv(mspsa430_frame *f) {
             uint8_t data[512];
             ssize_t bytes;
-            uint16_t total_bytes;
+            uint16_t total_bytes = 0;
 
             // Frame start-of-frame
             bytes = mspsa430_lld_read(this->lld, &data[0], 1);
@@ -318,9 +314,11 @@ namespace gr {
 
         void mspsa430::load_calibration_data() {
             uint8_t flash[65536];
-            ssize_t bytes = 0;
+            ssize_t bytes;
 
             bytes = this->flash_read(FLASH_CALIBRATION_DATA_START + sizeof(struct program_header), flash, sizeof(struct calibration_data));
+            if (bytes < 0)
+				return;//TODO: error
 
             this->calibration_data.format_version = be16toh(*(uint16_t *)flash);
             memcpy(this->calibration_data.calibration_date, (const uint8_t *)&flash[2], 16);
@@ -635,21 +633,27 @@ namespace gr {
         ssize_t bytes;
 
         mspsa430_lld_t lld;
-        mspsa430 *m = new mspsa430(&lld);
+        gr::mspsa430::mspsa430 *m = new gr::mspsa430::mspsa430(&lld);
 
+		std::cout << "connect " << std::endl;
         m->connect("/dev/ttyACM0", 921600);
 
+		std::cout << "get_info " << std::endl;
         information = m->get_info();
-        std::cout << information;
+        std::cout << information << std::endl;
 
+		std::cout << "setup " << std::endl;
         m->setup();
+
+		std::cout << "get_spectrum_no_init " << std::endl;
         spectrum = m->get_spectrum_no_init();
-
         for (int i=0; i<spectrum.size(); i++) {
-            std::cout << i << "," << (int)spectrum.at(i) << std::endl;
+            std::cout << (int)spectrum.at(i) << ", ";
         }
+        std::cout << std::endl;
 
-        m->disconnect();
+ 		std::cout << "disconnect " << std::endl;
+		m->disconnect();
 
         return 0;
     }

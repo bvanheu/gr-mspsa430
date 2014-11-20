@@ -23,6 +23,7 @@
 
 #include <mspsa430/source.h>
 #include "mspsa430/mspsa430.h"
+#include "mspsa430/mspsa430_lld.h"
 
 namespace gr {
   namespace mspsa430 {
